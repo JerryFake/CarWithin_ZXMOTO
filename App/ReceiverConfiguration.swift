@@ -35,6 +35,11 @@ struct ReceiverConfiguration {
     /// 留空表示自动取本机所在网段的网关（仪表热点一般是 .1）。
     var cfmotoAddress: String?
     var cfmotoProfile: CfmotoProfile?
+    /// 张雪 500RR（EYLink / EryaNet）：手机加入仪表热点 `iteAP` 后直连 192.168.43.1，
+    /// P2P 镜像默认 UDP 11111（TCP 11111 为 BLE 路径回退），控制 TCP 11112。
+    /// 留空默认 192.168.43.1。
+    var eylinkAddress: String?
+    var eylinkProfile: EylinkProfile?
     var ninebotAddress: String?
     var ninebotMode: NinebotOutput.Mode = .fiveInch
     var tailingAddress: String?
@@ -167,6 +172,15 @@ struct ReceiverConfiguration {
                   !cfmotoAddress.hasPrefix("169.254."), UInt32(bigEndian: target.s_addr) < 0xe0000000,
                   !cfmotoAddress.hasSuffix(".0"), !cfmotoAddress.hasSuffix(".255") else {
                 throw ConfigurationError("请输入春风仪表真实的 IPv4 地址（不能用网段地址 .0 或广播地址 .255），留空则自动取网关 .1。")
+            }
+        }
+        if let eylinkAddress, !eylinkAddress.isEmpty {
+            var target = in_addr()
+            guard inet_pton(AF_INET, eylinkAddress, &target) == 1, eylinkAddress != address,
+                  !eylinkAddress.hasPrefix("127."), !eylinkAddress.hasPrefix("0."),
+                  !eylinkAddress.hasPrefix("169.254."), UInt32(bigEndian: target.s_addr) < 0xe0000000,
+                  !eylinkAddress.hasSuffix(".0"), !eylinkAddress.hasSuffix(".255") else {
+                throw ConfigurationError(CWL("请输入张雪 500RR 仪表真实的 IPv4 地址（不能用 .0/.255），默认 192.168.43.1。"))
             }
         }
         if let ninebotAddress {

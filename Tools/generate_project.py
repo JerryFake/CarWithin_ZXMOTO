@@ -8,14 +8,19 @@ project = root / 'TDSCarKit.xcodeproj'; project.mkdir(exist_ok=True)
 local_settings = {}
 existing = project / 'project.pbxproj'
 if existing.exists():
-    converted = subprocess.run(['plutil', '-convert', 'xml1', '-o', '-', str(existing)],
-                               check=True, capture_output=True)
-    previous = plistlib.loads(converted.stdout)['objects']
-    for item in previous.values():
-        if item.get('isa') == 'PBXNativeTarget' and item.get('name') == 'TDSCarKit':
-            configs = previous[item['buildConfigurationList']]['buildConfigurations']
-            local_settings = {previous[key]['name']: previous[key]['buildSettings'] for key in configs}
-            break
+    try:
+        converted = subprocess.run(['plutil', '-convert', 'xml1', '-o', '-', str(existing)],
+                                   check=True, capture_output=True)
+        previous = plistlib.loads(converted.stdout)['objects']
+        for item in previous.values():
+            if item.get('isa') == 'PBXNativeTarget' and item.get('name') == 'TDSCarKit':
+                configs = previous[item['buildConfigurationList']]['buildConfigurations']
+                local_settings = {previous[key]['name']: previous[key]['buildSettings'] for key in configs}
+                break
+    except (FileNotFoundError, subprocess.CalledProcessError):
+        # plutil is macOS-only. On Windows/Linux the generated project is still valid;
+        # signing overrides can be supplied with TDS_BUNDLE_IDENTIFIER / TDS_DEVELOPMENT_TEAM.
+        pass
 def uid(name): return hashlib.sha1(name.encode()).hexdigest()[:24].upper()
 def q(value): return json.dumps(str(value))
 objects = []
@@ -23,7 +28,7 @@ def add(key, value): objects.append(f'{uid(key)} = {{ {value} }};'); return uid(
 sources = sorted([*root.glob('App/*.swift'), *root.glob('App/*.m'), *root.glob('App/*.c'), *root.rglob('Sources/TDSCarKitCore/**/*.swift'), *root.glob('Sources/CTDSCarKitCrypto/*.c')])
 refs = []; builds = []
 for path in sources:
-    relative = str(path.relative_to(root))
+    relative = path.relative_to(root).as_posix()
     filetype = {'.c':'sourcecode.c.c', '.m':'sourcecode.c.objc', '.swift':'sourcecode.swift'}[path.suffix]
     ref = add('ref:'+relative, f'isa = PBXFileReference; lastKnownFileType = {filetype}; path = {q(relative)}; sourceTree = "<group>";')
     refs.append(ref)
@@ -54,14 +59,14 @@ refs.append(receiver_ref)
 resource_builds.append(add('build:'+receiver_path, f'isa = PBXBuildFile; fileRef = {receiver_ref};'))
 # Shared supporter snapshot and offline payment codes.
 for path in sorted(root.glob('App/Support/*')):
-    relative = str(path.relative_to(root))
+    relative = path.relative_to(root).as_posix()
     filetype = 'text.json' if path.suffix == '.json' else 'image.png'
     ref = add('ref:'+relative, f'isa = PBXFileReference; lastKnownFileType = {filetype}; path = {q(relative)}; sourceTree = "<group>";')
     refs.append(ref)
     resource_builds.append(add('build:'+relative, f'isa = PBXBuildFile; fileRef = {ref};'))
 # Bundle any staged MFi identity files at the app bundle root so the app can load them directly.
 for path in sorted(root.glob('App/BundledIdentity/*')):
-    relative = str(path.relative_to(root))
+    relative = path.relative_to(root).as_posix()
     ref = add('ref:'+relative, f'isa = PBXFileReference; lastKnownFileType = file; path = {q(relative)}; sourceTree = "<group>";')
     refs.append(ref)
     resource_builds.append(add('build:'+relative, f'isa = PBXBuildFile; fileRef = {ref};'))
