@@ -67,6 +67,8 @@ final class NativeReceiver {
     private let cfmoto5 = CfmotoOutput(name: "cfmoto5")
     private let cfmoto62 = CfmotoOutput(name: "cfmoto62")
     var onCfmotoState: ((String) -> Void)?
+    private let eylink = EylinkOutput()
+    var onEylinkState: ((String) -> Void)?
     private let tailing = TailingOutput()
     var onTailingState: ((String) -> Void)?
     private lazy var carLink = CarLinkRelay(queue: queue)
@@ -179,6 +181,13 @@ final class NativeReceiver {
                         eryaVideoPort: configuration.eryaVideoPort, eryaControlPort: configuration.eryaControlPort,
                         onState: state, onLog: log, requestKeyframe: keyframe)
                 }
+            }
+            if let profile = configuration.eylinkProfile {
+                let target = configuration.eylinkAddress.flatMap({ $0.isEmpty ? nil : $0 }) ?? "192.168.43.1"
+                self.eylink.start(localAddress: configuration.address, targetAddress: target, profile: profile,
+                                  onState: { [weak self] in self?.onEylinkState?($0) },
+                                  onLog: { [weak self] in self?.log($0) },
+                                  requestKeyframe: { [weak self] in self?.requestKeyFrame(reason: "张雪 500RR 解码恢复") })
             }
             if let target = configuration.ninebotAddress {
                 self.ninebot.start(localAddress: configuration.address, targetAddress: target, mode: configuration.ninebotMode,
@@ -405,6 +414,7 @@ final class NativeReceiver {
         motorcyclePXC.stop()
         cfmoto5.stop()
         cfmoto62.stop()
+        eylink.stop()
         tailing.stop()
         carLink.stop()
         #if DEBUG
@@ -511,6 +521,9 @@ final class NativeReceiver {
                     if let cfmoto = configuration.cfmotoProfile {
                         let output = cfmoto == .sixInch ? self.cfmoto62 : self.cfmoto5
                         output.append(data, codec: codec, keyframe: keyframe)
+                    }
+                    if configuration.eylinkProfile != nil {
+                        self.eylink.append(data, codec: codec, keyframe: keyframe)
                     }
                     if configuration.tailingAddress != nil { self.tailing.append(data, codec: codec) }
                     if configuration.carLifeEnabled { self.carLife.append(data, codec: codec) }

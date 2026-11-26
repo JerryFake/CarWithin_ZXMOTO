@@ -1,0 +1,66 @@
+name: Build unsigned IPA
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main, master, zxmoto-500rr]
+    paths:
+      - 'App/**'
+      - 'Sources/**'
+      - 'Tools/generate_project.py'
+      - 'TDSCarKit.xcodeproj/**'
+      - '.github/workflows/build-ipa.yml'
+
+jobs:
+  build:
+    name: Build CarWithin (unsigned)
+    runs-on: macos-15
+    timeout-minutes: 30
+
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Generate Xcode project
+        run: python3 Tools/generate_project.py
+
+      - name: Build arm64 app
+        run: |
+          set -o pipefail
+          xcodebuild \
+            -project TDSCarKit.xcodeproj \
+            -scheme TDSCarKit \
+            -configuration Release \
+            -sdk iphoneos \
+            -destination 'generic/platform=iOS' \
+            -derivedDataPath build/source \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGN_IDENTITY="" \
+            build | tee build-xcodebuild.log
+
+      - name: Package unsigned IPA
+        run: |
+          APP="build/source/Build/Products/Release-iphoneos/TDSCarKit.app"
+          test -d "$APP"
+          rm -rf Payload
+          mkdir Payload
+          cp -R "$APP" Payload/TDSCarKit.app
+          # The IPA zip root must contain Payload/. Do not use ditto --keepParent.
+          zip -qry CarWithin-unsigned.ipa Payload
+          ls -lh CarWithin-unsigned.ipa
+
+      - name: Upload IPA
+        uses: actions/upload-artifact@v4
+        with:
+          name: CarWithin-unsigned-ipa
+          path: CarWithin-unsigned.ipa
+          if-no-files-found: error
+
+      - name: Upload build log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-log
+          path: build-xcodebuild.log
+          if-no-files-found: ignore

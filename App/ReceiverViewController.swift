@@ -225,6 +225,18 @@ final class ReceiverViewController: UIViewController, CLLocationManagerDelegate 
         cfmotoStatus.text = message
         cfmotoCardStatus.text = message
     }
+    private let eylinkCard = UIStackView()
+    private let eylinkCardStatus = UILabel()
+    private let eylinkStatus = StatusLabel()
+    private let eylinkAddressField = UITextField()
+    /// 张雪 500RR 目前只有 5 寸仪表一种规格，实际画面尺寸由 EYLink 的 OK 包协商。
+    private var eylinkProfile: EylinkProfile? {
+        outputMode == .zxmoto500rr ? .zxmoto500rr : nil
+    }
+    private func updateEylinkStatus(_ message: String) {
+        eylinkStatus.text = message
+        eylinkCardStatus.text = message
+    }
     private let ninebotCard = UIStackView()
     private var ninebotCardInstructions: UILabel?
     private var ninebotInstructions: String {
@@ -277,9 +289,9 @@ final class ReceiverViewController: UIViewController, CLLocationManagerDelegate 
     private let headUnitOutput = ChoiceMenu(items: HeadUnitOutput.menuOrder.map(\.title))
     private enum HeadUnitOutput: Int {
         // Persisted in headUnitOutputV2. Append new modes after existing values.
-        case browser, carLife, airPlay, tailing, ninebot, zeeho, ninebotSeven, ninebot43, zeehoSEPlus, zeehoAE2, cfmoto5, cfmoto62, cfmoto700MT, cfmoto800MT, cfmoto675SRR, benelliTRK, vogeDS800X, zontes368E, zontes368G, zontes703RR, qjSRT550, kove625X, moriniXCape1200, kove450Rally, kove800X, shouqu, zeehoAE4i, koveInstrument
+        case browser, carLife, airPlay, tailing, ninebot, zeeho, ninebotSeven, ninebot43, zeehoSEPlus, zeehoAE2, cfmoto5, cfmoto62, cfmoto700MT, cfmoto800MT, cfmoto675SRR, benelliTRK, vogeDS800X, zontes368E, zontes368G, zontes703RR, qjSRT550, kove625X, moriniXCape1200, kove450Rally, kove800X, shouqu, zeehoAE4i, koveInstrument, zxmoto500rr
         // Display order is independent of the persisted raw values above.
-        static let menuOrder: [Self] = [.browser, .carLife, .airPlay, .ninebot43, .ninebot, .ninebotSeven, .tailing, .zeeho, .zeehoSEPlus, .zeehoAE2, .zeehoAE4i, .cfmoto5, .cfmoto62, .cfmoto700MT, .cfmoto800MT, .cfmoto675SRR, .shouqu, .benelliTRK, .vogeDS800X, .zontes368E, .zontes368G, .zontes703RR, .qjSRT550, .kove625X, .koveInstrument, .moriniXCape1200, .kove450Rally, .kove800X]
+        static let menuOrder: [Self] = [.browser, .carLife, .airPlay, .ninebot43, .ninebot, .ninebotSeven, .tailing, .zeeho, .zeehoSEPlus, .zeehoAE2, .zeehoAE4i, .cfmoto5, .cfmoto62, .cfmoto700MT, .cfmoto800MT, .cfmoto675SRR, .shouqu, .benelliTRK, .vogeDS800X, .zontes368E, .zontes368G, .zontes703RR, .qjSRT550, .kove625X, .koveInstrument, .moriniXCape1200, .kove450Rally, .kove800X, .zxmoto500rr]
         var menuIndex: Int { Self.menuOrder.firstIndex(of: self)! }
         var title: String {
             switch self {
@@ -296,6 +308,7 @@ final class ReceiverViewController: UIViewController, CLLocationManagerDelegate 
             case .zeehoAE2: return CWL("极核 AE2 Pro 5 寸")
             case .cfmoto5: return CWL("春风 5 寸")
             case .cfmoto62: return CWL("春风 6.2 寸")
+            case .zxmoto500rr: return CWL("张雪 500RR 5 寸")
             default: return motorcycleProfile?.menuTitle ?? ""
             }
         }
@@ -337,7 +350,8 @@ final class ReceiverViewController: UIViewController, CLLocationManagerDelegate 
             }
         }
         var cfmoto: Bool { self == .cfmoto5 || self == .cfmoto62 }
-        var usesInstrumentWiFi: Bool { motorcycleProfile != nil || cfmoto || self == .tailing || zeehoProfile != nil || ninebotMode != nil }
+        var eylink: Bool { self == .zxmoto500rr }
+        var usesInstrumentWiFi: Bool { motorcycleProfile != nil || cfmoto || eylink || self == .tailing || zeehoProfile != nil || ninebotMode != nil }
     }
     private var airPlayStreamID: UUID?
     private var airPlayStreamURL: URL?
@@ -622,6 +636,14 @@ final class ReceiverViewController: UIViewController, CLLocationManagerDelegate 
         motorcycleSettings.addAction(UIAction { [weak self] _ in self?.revealSettings(output: true) }, for: .touchUpInside)
         motorcycleCard.addArrangedSubview(motorcycleSettings); stack.addArrangedSubview(motorcycleCard)
 
+        configureConnectionCard(eylinkCard, title: "张雪 500RR 连接", symbol: "scooter", color: .systemBlue,
+            instructions: "让 iPhone 加入 500RR 仪表 Wi-Fi（iteAP），在仪表上打开投屏导航，再启动 CarPlay。EYLink 镜像走 UDP 11111（P2P）。", status: eylinkCardStatus)
+        let eylinkSettings = UIButton(type: .system)
+        eylinkSettings.configuration = .tinted()
+        eylinkSettings.configuration?.title = CWL("连接设置")
+        eylinkSettings.addAction(UIAction { [weak self] _ in self?.revealSettings(output: true) }, for: .touchUpInside)
+        eylinkCard.addArrangedSubview(eylinkSettings)
+        stack.addArrangedSubview(eylinkCard)
         ninebotCardInstructions = configureConnectionCard(ninebotCard, title: CWL("九号仪表连接"), symbol: "scooter", color: .systemBlue,
             instructions: ninebotInstructions, status: ninebotCardStatus)
         let ninebotSettings = UIButton(type: .system)
@@ -780,6 +802,10 @@ final class ReceiverViewController: UIViewController, CLLocationManagerDelegate 
         receiver.onCfmotoState = { [weak self] message in
             guard let self, self.running, self.outputMode.cfmoto else { return }
             self.updateCfmotoStatus(message)
+        }
+        receiver.onEylinkState = { [weak self] message in
+            guard let self, self.running, self.outputMode.eylink else { return }
+            self.updateEylinkStatus(message)
         }
         receiver.onNinebotState = { [weak self] message in
             guard let self, self.running, self.outputMode.ninebotMode != nil else { return }
@@ -965,6 +991,11 @@ final class ReceiverViewController: UIViewController, CLLocationManagerDelegate 
     /// Size, frame rate and codec for the next session from the settings, the known head-unit
     /// screen and any lighter level chosen by CWL("自动重启").
     private func planDisplay(for screen: CarScreen?) -> DisplayPlan {
+        if let eylink = eylinkProfile {
+            let icon = ReceiverConfiguration.iconSizes[max(0, iconSizeControl.selectedSegmentIndex)].widthMM
+            return DisplayPlan(width: eylink.encodeWidth, height: eylink.encodeHeight,
+                               fps: eylink.fps, codec: .h264, iconWidthMM: icon)
+        }
         if let profile = outputMode.motorcycleProfile {
             let icon = ReceiverConfiguration.iconSizes[max(0, iconSizeControl.selectedSegmentIndex)].widthMM
             return DisplayPlan(width: profile.width, height: profile.height, fps: 30, codec: .h264, iconWidthMM: icon)
@@ -1243,6 +1274,10 @@ final class ReceiverViewController: UIViewController, CLLocationManagerDelegate 
         if !running {
             updateCfmotoStatus("等待启动 CarPlay · 仪表 IP：\(cfmotoAddressField.text?.isEmpty == false ? cfmotoAddressField.text! : "自动取网关")")
         }
+        eylinkCard.isHidden = !showsLocalOutput || !outputMode.eylink
+        if !running {
+            updateEylinkStatus("等待启动 CarPlay · 仪表 IP：\(eylinkAddressField.text?.isEmpty == false ? eylinkAddressField.text! : "192.168.43.1")")
+        }
         tailingCard.isHidden = !showsLocalOutput || outputMode != .tailing
         if !running { updateTailingStatus(CWL("等待启动 CarPlay · 仪表 IP：{1}", [String(describing: tailingAddressField.text ?? "192.168.1.1")])) }
         carLifeCard.isHidden = !showsLocalOutput || outputMode != .carLife
@@ -1315,6 +1350,10 @@ final class ReceiverViewController: UIViewController, CLLocationManagerDelegate 
         if let profile = cfmotoProfile {
             config.cfmotoAddress = (cfmotoAddressField.text ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
             config.cfmotoProfile = profile
+        }
+        if let profile = eylinkProfile {
+            config.eylinkAddress = (eylinkAddressField.text ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+            config.eylinkProfile = profile
         }
         if let mode = outputMode.ninebotMode {
             config.ninebotAddress = (activeNinebotAddressField.text ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
@@ -2024,6 +2063,7 @@ final class ReceiverViewController: UIViewController, CLLocationManagerDelegate 
         zeehoAE4iBitrateControl.isEnabled = value
         zeehoAE4iEncodeProfileControl.isEnabled = value
         cfmotoAddressField.isEnabled = value
+        eylinkAddressField.isEnabled = value
         ninebotAddressField.isEnabled = value
         ninebot43AddressField.isEnabled = value
         tailingAddressField.isEnabled = value
@@ -2323,6 +2363,9 @@ extension ReceiverViewController {
         cfmotoAddressField.text = defaults.string(forKey: "cfmotoAddress") ?? "192.168.0.1"
         cfmotoAddressField.keyboardType = .decimalPad
         cfmotoAddressField.addTarget(self, action: #selector(saveHeadUnitOutput), for: .editingDidEnd)
+        eylinkAddressField.text = defaults.string(forKey: "eylinkAddress") ?? "192.168.43.1"
+        eylinkAddressField.keyboardType = .decimalPad
+        eylinkAddressField.addTarget(self, action: #selector(saveHeadUnitOutput), for: .editingDidEnd)
         ninebotAddressField.text = defaults.string(forKey: "ninebotAddress") ?? "192.168.1.1"
         ninebotAddressField.keyboardType = .decimalPad
         ninebotAddressField.addTarget(self, action: #selector(saveHeadUnitOutput), for: .editingDidEnd)
@@ -2355,7 +2398,7 @@ extension ReceiverViewController {
         }
         nameField.addTarget(self, action: #selector(receiverNameChanged), for: .editingDidEnd)
         channelField.keyboardType = .numberPad
-        [nameField, ipField, ssidField, passwordField, channelField, carLifeAddressField, tailingAddressField, ninebotAddressField, ninebot43AddressField, zeehoAddressField, zeehoSEPlusAddressField, cfmotoAddressField, motorcycleAddressField, eryaVideoPortField, eryaControlPortField, videoOutputPortField, secureVideoOutputPortField, httpsDomainField, httpsTokenField].forEach {
+        [nameField, ipField, ssidField, passwordField, channelField, carLifeAddressField, tailingAddressField, ninebotAddressField, ninebot43AddressField, zeehoAddressField, zeehoSEPlusAddressField, cfmotoAddressField, motorcycleAddressField, eryaVideoPortField, eryaControlPortField, eylinkAddressField, videoOutputPortField, secureVideoOutputPortField, httpsDomainField, httpsTokenField].forEach {
             $0.returnKeyType = .done
             $0.addTarget($0, action: #selector(UIResponder.resignFirstResponder), for: .editingDidEndOnExit)
             if $0.inputAccessoryView == nil {
@@ -2376,6 +2419,7 @@ extension ReceiverViewController {
         UserDefaults.standard.set(zeehoAddressField.text ?? "", forKey: "zeehoAddress")
         UserDefaults.standard.set(zeehoSEPlusAddressField.text ?? "", forKey: "zeehoSEPlusAddress")
         UserDefaults.standard.set(cfmotoAddressField.text ?? "", forKey: "cfmotoAddress")
+        UserDefaults.standard.set(eylinkAddressField.text ?? "", forKey: "eylinkAddress")
         UserDefaults.standard.set(ninebotAddressField.text ?? "", forKey: "ninebotAddress")
         UserDefaults.standard.set(ninebot43AddressField.text ?? "", forKey: "ninebot43Address")
         UserDefaults.standard.set(tailingAddressField.text ?? "", forKey: "tailingAddress")
@@ -2714,6 +2758,12 @@ extension ReceiverViewController {
 
     fileprivate func displayPage() -> SettingsPageController {
         page(CWL("画面")) { [unowned self] in
+            if let eylink = eylinkProfile {
+                return [
+                    SettingsSection("张雪 500RR 5 寸", [.info(CWL("仪表画面"), "\(eylink.encodeWidth)×\(eylink.encodeHeight) · H.264 · EYLink(UDP 11111) · \(eylink.fps) FPS")]),
+                    SettingsSection(CWL("图标"), [.control(CWL("CarPlay 图标大小"), icon: ("square.grid.2x2.fill", .systemPurple), iconSizeControl)])
+                ]
+            }
             if let profile = outputMode.motorcycleProfile {
                 return [SettingsSection(profile.title, footer: profile.instructions, [.info(CWL("仪表画面"), profile.detail)]),
                     SettingsSection(CWL("图标"), [.control(CWL("CarPlay 图标大小"), icon: ("square.grid.2x2.fill", .systemPurple), iconSizeControl)])]
@@ -3096,6 +3146,11 @@ extension ReceiverViewController {
                 }
                 rows.append(.note(zeehoStatus))
                 return [SettingsSection(name, footer: CWL("先在 CarWithin 点“启动本机 CarPlay”。若仪表没出画，保持 CarWithin 运行，再去极核 APP 打开仪表投屏导航。仪表出画后立刻切回或划掉极核 APP。声音由 iPhone 或蓝牙输出。"), rows)]
+            case .zxmoto500rr:
+                return [SettingsSection(headUnitOutput.selectedTitle, footer: "iPhone 加入 500RR 仪表 Wi-Fi（iteAP），在仪表打开投屏导航后启动 CarPlay。EYLink 镜像默认走 UDP 11111（P2P），回退 TCP 11111，控制 TCP 11112，默认网关 192.168.43.1。BLE 扫码握手暂未实现，若手动连接无画面请提交日志。", [
+                    .field(CWL("仪表 IP 地址"), eylinkAddressField, placeholder: "192.168.43.1"),
+                    .note(eylinkStatus)
+                ])]
             case .cfmoto5, .cfmoto62:
                 return [SettingsSection(headUnitOutput.selectedTitle, footer: "iPhone 加入春风仪表 Wi-Fi 并开启仪表投屏，TCP 10920/10921/10922，探测 10930。留空 IP 时尝试同网段 .1，失败请填写实际仪表 IP。", [
                     .field(CWL("仪表 IP 地址"), cfmotoAddressField, placeholder: "留空尝试 .1"),
@@ -3156,6 +3211,7 @@ extension ReceiverViewController {
         if configuration.zeehoAddress != nil { updateZeehoStatus(CWL("正在连接极核仪表…")) }
         if configuration.motorcycleProfile != nil { updateMotorcycleStatus(CWL("正在连接摩托车仪表…")) }
         if configuration.cfmotoProfile != nil { updateCfmotoStatus("正在推流到春风仪表…") }
+        if configuration.eylinkProfile != nil { updateEylinkStatus("正在连接张雪 500RR 仪表…") }
         if configuration.ninebotAddress != nil { updateNinebotStatus(CWL("正在连接九号仪表…")) }
         if configuration.tailingAddress != nil { updateTailingStatus(CWL("正在连接台铃仪表…")) }
         if configuration.carLifeEnabled {

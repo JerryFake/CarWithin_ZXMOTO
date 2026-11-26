@@ -3,6 +3,8 @@
 mfi/
 offline-mfi/
 IdentityImport/
+# 本地构建用 MFi 身份（来自官方 unsigned IPA，不要提交私钥）
+App/BundledIdentity/
 .env
 .env.*
 !.env.example
@@ -37,3 +39,26 @@ __pycache__/
 # Local analysis artifacts
 analysis/
 reference/
+tmp/
+# ZXMOTO / EYLink reverse-engineering scratch (do not commit APK or decompiled output)
+_research/
+apkchunks/
+chunk*.bin
+challenge.js
+dex/
+dexstrings*
+dextypes*
+jadx/
+jadx.zip
+jadxout/
+zxmoto.apk
+dl_apk.py
+classstrings.py
+dexscan.py
+dexstrings.py
+getjadx.py
+inspectjar.py
+jsscan*.py
+listlibs.py
+scan.py
+searchapk.py

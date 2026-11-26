@@ -141,6 +141,17 @@ Video and recovery after locking the iPhone have been confirmed on one instrumen
 
 Join the dashboard Wi-Fi on the iPhone, select the corresponding CFMOTO output, enable dashboard projection and start CarPlay. Set the dashboard address in Output settings. Leaving it blank tries `.1` on the local subnet; this is a guess, not a discovered DHCP gateway. Enter the real address if it fails. A separate PXC session uses TCP 10920/10921/10922 and probe port 10930, with negotiated, aligned video dimensions. Audio and controls remain on the iPhone or its Bluetooth device. The maintainer has no CFMOTO dashboard, so connection, video and background behavior need hardware testing.
 
+### ZXMOTO 500RR 5-inch dashboard (experimental)
+
+The 500RR's projection-navigation uses EYLink / EryaNet, not CarLife or CFMOTO PXC. Join the
+dashboard's `iteAP` hotspot, choose `张雪 500RR 5 寸` under Current output, confirm the dashboard
+IP is `192.168.43.1` (editable under Output settings), open projection navigation on the
+dashboard, then start CarPlay. The P2P/iteAP mirror channel defaults to UDP 11111, falls back
+to TCP 11111 when UDP gets no response; the control channel is TCP 11112.
+The protocol was reverse engineered from the ZXMOTO app. The official BLE/QR handshake is not
+implemented; if it stalls at "requesting projection", trigger projection with the official app
+first or add the BLE flow. Not yet validated on a real 500RR. [Protocol, build and debug notes](ZXMOTO-500RR.md).
+
 ### ANT BMS battery cards
 
 Enable reading under Settings → Battery & BMS and explicitly select the Bluetooth device. The feature is off by default and only queries telemetry; it does not change battery parameters. Configure fields, position, size and transparency for charge level, voltage, current, power, temperature and cell-voltage spread. Old values are hidden after five seconds without valid new data.
