@@ -219,6 +219,10 @@ final class EylinkOutput {
             DispatchQueue.global(qos: .userInitiated).async { [self] in
                 encodeLoop()
             }
+            queue.asyncAfter(deadline: .now() + 12) { [weak self] in
+                guard let self, self.active, !self.mirrorReady, !self.configured else { return }
+                self.report("ZXMOTO 仪表未连接：请确认 iPhone 已加入 iteAP 热点，且仪表 IP 为 192.168.43.1")
+            }
         }
 
         private var active: Bool { lock.withLock { !cancelled } }
@@ -420,6 +424,12 @@ final class EylinkOutput {
                     mirrorBuffer.removeFirst(15)
                     onLog("EYLink 仪表使用 TP 旧格式，暂不支持")
                 } else if mirrorBuffer[0] == 0xAA, mirrorBuffer[1] == 0xBB {
+                    guard mirrorBuffer.count >= 4 else { return }
+                    // 官方把 AA BB CC 0F 当作 ACK 帧头，其余 AA BB 前缀按脏字节丢弃。
+                    guard mirrorBuffer[2] == 0xCC, mirrorBuffer[3] == 0x0F else {
+                        mirrorBuffer.removeFirst()
+                        continue
+                    }
                     guard mirrorBuffer.count >= 12 else { return }
                     let length = Int(mirrorBuffer[8]) | Int(mirrorBuffer[9]) << 8
                         | Int(mirrorBuffer[10]) << 16 | Int(mirrorBuffer[11]) << 24
