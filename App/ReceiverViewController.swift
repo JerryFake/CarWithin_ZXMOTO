@@ -229,7 +229,7 @@ final class ReceiverViewController: UIViewController, CLLocationManagerDelegate 
     private let eylinkCardStatus = UILabel()
     private let eylinkStatus = StatusLabel()
     private let eylinkAddressField = UITextField()
-    /// 张雪 500RR / 820R 都按 5 寸仪表处理，实际画面尺寸由 EYLink 的 OK 包协商。
+    /// 张雪 500RR / 820R 都走 EYLink；800×480 只是初始请求值，实际画面尺寸由仪表 OK 包协商。
     private var eylinkProfile: EylinkProfile? {
         switch outputMode {
         case .zxmoto500rr: return .zxmoto500rr
@@ -313,7 +313,7 @@ final class ReceiverViewController: UIViewController, CLLocationManagerDelegate 
             case .cfmoto5: return CWL("春风 5 寸")
             case .cfmoto62: return CWL("春风 6.2 寸")
             case .zxmoto500rr: return CWL("张雪 500RR 5 寸")
-            case .zxmoto820r: return CWL("张雪 820R 5 寸")
+            case .zxmoto820r: return CWL("张雪 820R")
             default: return motorcycleProfile?.menuTitle ?? ""
             }
         }
@@ -642,7 +642,7 @@ final class ReceiverViewController: UIViewController, CLLocationManagerDelegate 
         motorcycleCard.addArrangedSubview(motorcycleSettings); stack.addArrangedSubview(motorcycleCard)
 
         configureConnectionCard(eylinkCard, title: "ZXMOTO 仪表连接", symbol: "scooter", color: .systemBlue,
-            instructions: "让 iPhone 加入 ZXMOTO 仪表 Wi-Fi（iteAP），在仪表上打开投屏导航，再启动 CarPlay。500RR 与 820R 都走 EYLink，镜像默认 UDP 11111（P2P），回退 TCP 11111。", status: eylinkCardStatus)
+            instructions: "让 iPhone 加入 ZXMOTO 仪表 Wi-Fi（热点名一般是 iteAP），在仪表上打开投屏导航，再启动 CarPlay。500RR 与 820R 都走 EYLink，镜像走 TCP 11111（失败回退 UDP 11111），控制 TCP 11113。", status: eylinkCardStatus)
         let eylinkSettings = UIButton(type: .system)
         eylinkSettings.configuration = .tinted()
         eylinkSettings.configuration?.title = CWL("连接设置")
@@ -2766,7 +2766,7 @@ extension ReceiverViewController {
         page(CWL("画面")) { [unowned self] in
             if let eylink = eylinkProfile {
                 return [
-                    SettingsSection(eylink.label, [.info(CWL("仪表画面"), "\(eylink.encodeWidth)×\(eylink.encodeHeight) · H.264 · EYLink(UDP 11111) · \(eylink.fps) FPS")]),
+                    SettingsSection(eylink.label, [.info(CWL("仪表画面"), "\(eylink.encodeWidth)×\(eylink.encodeHeight) · H.264 · EYLink(TCP 11111) · \(eylink.fps) FPS")]),
                     SettingsSection(CWL("图标"), [.control(CWL("CarPlay 图标大小"), icon: ("square.grid.2x2.fill", .systemPurple), iconSizeControl)])
                 ]
             }
@@ -3153,7 +3153,7 @@ extension ReceiverViewController {
                 rows.append(.note(zeehoStatus))
                 return [SettingsSection(name, footer: CWL("先在 CarWithin 点“启动本机 CarPlay”。若仪表没出画，保持 CarWithin 运行，再去极核 APP 打开仪表投屏导航。仪表出画后立刻切回或划掉极核 APP。声音由 iPhone 或蓝牙输出。"), rows)]
             case .zxmoto500rr, .zxmoto820r:
-                return [SettingsSection(headUnitOutput.selectedTitle, footer: "iPhone 加入 ZXMOTO 仪表 Wi-Fi（iteAP），在仪表打开投屏导航后启动 CarPlay。500RR 5 寸与 820R 5 寸都走同一套 EYLink 协议：镜像默认 UDP 11111（P2P），回退 TCP 11111，控制 TCP 11112，默认网关 192.168.43.1。BLE 扫码握手暂未实现，若手动连接无画面请提交日志。", [
+                return [SettingsSection(headUnitOutput.selectedTitle, footer: "iPhone 加入 ZXMOTO 仪表 Wi-Fi（热点名一般是 iteAP），在仪表打开投屏导航后启动 CarPlay。500RR 与 820R 都走同一套 EYLink 协议：镜像走 TCP 11111（失败回退 UDP 11111），控制 TCP 11113；网关默认 192.168.43.1，实际画面尺寸由仪表回到的 OK 包协商。BLE 扫码握手暂未实现，若手动连接无画面请提交日志。", [
                     .field(CWL("仪表 IP 地址"), eylinkAddressField, placeholder: "192.168.43.1"),
                     .note(eylinkStatus)
                 ])]

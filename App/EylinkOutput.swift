@@ -1,14 +1,16 @@
 import CoreImage
 import Foundation
 import Network
+import UIKit
 import VideoToolbox
 
 /// ZXMOTO 仪表（EYLink / EryaNet）的输出规格。
 ///
 /// 500RR 与 820R 的“投屏导航”都走 EYLink：手机加入仪表热点 `iteAP` 后直连 `192.168.43.1`：
-/// - UDP 11111：P2P/iteAP 路径的镜像通道，收 `OK` 画面参数、发 `MIRROR_START` 与 H.264 帧；
-/// - TCP 11111：BLE 扫码路径的镜像通道（本实现作为回退）；
-/// - TCP 11112：控制通道，收发 `EY` JSON 帧（可选，本实现只用来读日志）。
+/// - TCP 11111：镜像通道（官方 Android App 在无蓝牙/手动连热点时走 TCP），
+///   收 `OK` 画面参数、发 `MIRROR_START` 与 H.264 帧；
+/// - UDP 11111：旧固件的镜像通道（本实现作为回退）；
+/// - TCP 11113：控制通道，收发 `EY` JSON 帧（可选，本实现只用来读日志）。
 ///
 /// 仪表尺寸由 `OK` 包协商，默认值只用于 MIRROR_START 的初始请求。
 struct EylinkProfile: Equatable {
@@ -21,9 +23,26 @@ struct EylinkProfile: Equatable {
     static let zxmoto500rr = EylinkProfile(width: 800, height: 480, fps: 30, bitrate: 4_000_000,
                                            label: "张雪 500RR 5 寸")
 
-    /// 820R 按用户确认的 5 寸仪表处理；实际尺寸仍以仪表 `OK` 包协商结果为准。
+    /// 820R 的仪表是 6.2 寸 TFT（部分资料/早期样车按 5 寸处理）；这里仍以
+    /// 仪表 `OK` 包回报的尺寸为准，800×480 只是 MIRROR_START 的初始请求值。
     static let zxmoto820r = EylinkProfile(width: 800, height: 480, fps: 30, bitrate: 4_000_000,
-                                          label: "张雪 820R 5 寸")
+                                          label: "张雪 820R")
+
+    /// MIRROR_START 携带的是手机屏幕像素尺寸（官方 Android 用 WindowUtil 的值，
+    /// 长边压到 2560 以内）；仪表据此选择镜像布局，真正编码尺寸由 `OK` 包决定。
+    static func mirrorRequest(width: Int, height: Int) -> (width: Int, height: Int) {
+        var w = width
+        var h = height
+        let longest = max(w, h)
+        if longest > 2560 {
+            let scale = 2560.0 / Double(longest)
+            w = Int((Double(w) * scale).rounded())
+            h = Int((Double(h) * scale).rounded())
+        }
+        w -= w % 2
+        h -= h % 2
+        return (max(160, w), max(160, h))
+    }
 
     var encodeWidth: Int { width - width % 2 }
     var encodeHeight: Int { height % 2 == 0 ? height : height + 1 }
@@ -32,8 +51,8 @@ struct EylinkProfile: Equatable {
 
 /// EYLink 的 12 字节包头 + payload。
 ///
-/// 头部固定为 `AA BB CC func 00 00 00 00`，payload 长度是 bytes[8..12] 的大端
-/// uint32；payload 从 byte12 开始。视频 payload 是 `uint32BE 时间戳 + Annex-B H.264`。
+/// 头部固定为 `AA BB CC func 00 00 00 00`，payload 长度是 bytes[8..12] 的小端
+/// uint32；payload 从 byte12 开始。视频 payload 是 `uint32LE 时间戳 + Annex-B H.264`。
 private enum EylinkPacket {
     static let videoFunction: UInt8 = 0
     static let mirrorStartFunction: UInt8 = 4
@@ -62,16 +81,17 @@ private enum EylinkPacket {
         return packet(function: videoFunction, payload: payload)
     }
 
+    /// EYLink 的数值字段全部是小端（官方 Android App 用 intTo2Bytes/intTo4Bytes 写入）。
     static func appendUInt16(_ value: UInt16, to data: inout Data) {
-        data.append(UInt8((value >> 8) & 0xFF))
         data.append(UInt8(value & 0xFF))
+        data.append(UInt8((value >> 8) & 0xFF))
     }
 
     static func appendUInt32(_ value: UInt32, to data: inout Data) {
-        data.append(UInt8((value >> 24) & 0xFF))
-        data.append(UInt8((value >> 16) & 0xFF))
-        data.append(UInt8((value >> 8) & 0xFF))
         data.append(UInt8(value & 0xFF))
+        data.append(UInt8((value >> 8) & 0xFF))
+        data.append(UInt8((value >> 16) & 0xFF))
+        data.append(UInt8((value >> 24) & 0xFF))
     }
 }
 
@@ -136,8 +156,10 @@ final class EylinkOutput {
         private var mirrorBuffer: [UInt8] = []
         private var controlBuffer: [UInt8] = []
         private var mirrorReady = false
-        private var mirrorIsUDP = true
-        private var triedTCPFallback = false
+        private var mirrorIsUDP = false
+        private var triedUDPFallback = false
+        private var requestWidth: Int
+        private var requestHeight: Int
         private var startTimer: DispatchSourceTimer?
         private var startAttempts = 0
 
@@ -175,12 +197,23 @@ final class EylinkOutput {
             self.onState = onState
             self.onLog = onLog
             self.requestKeyframe = requestKeyframe
+            let bounds = UIScreen.main.nativeBounds
+            let screenWidth = Int(bounds.width)
+            let screenHeight = Int(bounds.height)
+            if screenWidth >= 160, screenHeight >= 160 {
+                let request = EylinkProfile.mirrorRequest(width: screenWidth, height: screenHeight)
+                requestWidth = request.width
+                requestHeight = request.height
+            } else {
+                requestWidth = profile.width
+                requestHeight = profile.height
+            }
         }
 
         func start() {
             report("正在连接\(profile.label)仪表…")
             queue.async { [self] in
-                openMirror()
+                openMirror(udp: false)
                 openControl()
             }
             DispatchQueue.global(qos: .userInitiated).async { [self] in
@@ -223,7 +256,7 @@ final class EylinkOutput {
 
         private func makeParameters(udp: Bool) -> NWParameters {
             if udp {
-                // 手机连 iteAP 时官方走 UDP 11111（P2P 分支）；UDP 连接不建流，
+                // 回退路径：旧固件/BLE 分支走 UDP 11111。UDP 连接不建流，
                 // 每个 MIRROR_START/VIDEO_DATA 都是一个独立 datagram。
                 // 官方 DatagramSocket(11111) 会绑定本机 11111 再连接仪表；
                 // 某些仪表固件会固定向手机 11111 回 OK，因此这里也绑定同端口。
@@ -247,7 +280,7 @@ final class EylinkOutput {
             return parameters
         }
 
-        private func openMirror(udp: Bool = true) {
+        private func openMirror(udp: Bool = false) {
             guard let port = NWEndpoint.Port(rawValue: 11111) else { return }
             mirror?.cancel()
             mirrorBuffer.removeAll()
@@ -265,7 +298,8 @@ final class EylinkOutput {
         }
 
         private func openControl() {
-            guard let port = NWEndpoint.Port(rawValue: 11112) else { return }
+            // 控制通道：Constants.TCP_PORT_MESSAGE 默认 11113（不是 11112）。
+            guard let port = NWEndpoint.Port(rawValue: 11113) else { return }
             let connection = NWConnection(host: NWEndpoint.Host(targetAddress), port: port,
                                           using: makeParameters(udp: false))
             control = connection
@@ -357,10 +391,10 @@ final class EylinkOutput {
             if let connection, mirror !== connection { return }
             mirrorReady = false
             stopStartTimer()
-            if mirrorIsUDP, !configured, !triedTCPFallback {
-                triedTCPFallback = true
-                report("UDP 11111 无响应，尝试 TCP 11111…")
-                openMirror(udp: false)
+            if !mirrorIsUDP, !configured, !triedUDPFallback {
+                triedUDPFallback = true
+                report("TCP 11111 无响应，回退 UDP 11111…")
+                openMirror(udp: true)
                 return
             }
             let reason = error?.localizedDescription ?? "连接已关闭"
@@ -387,8 +421,8 @@ final class EylinkOutput {
                     onLog("EYLink 仪表使用 TP 旧格式，暂不支持")
                 } else if mirrorBuffer[0] == 0xAA, mirrorBuffer[1] == 0xBB {
                     guard mirrorBuffer.count >= 12 else { return }
-                    let length = Int(mirrorBuffer[8]) << 24 | Int(mirrorBuffer[9]) << 16
-                        | Int(mirrorBuffer[10]) << 8 | Int(mirrorBuffer[11])
+                    let length = Int(mirrorBuffer[8]) | Int(mirrorBuffer[9]) << 8
+                        | Int(mirrorBuffer[10]) << 16 | Int(mirrorBuffer[11]) << 24
                     guard length >= 0, length <= 2048, mirrorBuffer.count >= 12 + length else { return }
                     let payload = Array(mirrorBuffer[(12)..<(12 + length)])
                     mirrorBuffer.removeFirst(12 + length)
@@ -402,7 +436,7 @@ final class EylinkOutput {
 
         private func handleOK(_ bytes: [UInt8]) {
             guard bytes.count >= 13, bytes[0] == 0x4F, bytes[1] == 0x4B else { return }
-            func value(_ index: Int) -> Int { Int(bytes[index]) << 8 | Int(bytes[index + 1]) }
+            func value(_ index: Int) -> Int { Int(bytes[index]) | Int(bytes[index + 1]) << 8 }
             let portraitWidth = value(2)
             let portraitHeight = value(4)
             let landscapeWidth = value(6)
@@ -431,16 +465,20 @@ final class EylinkOutput {
             requestKeyframe()
         }
 
+        private static func eylinkInteger(_ value: Any?) -> Int? {
+            if let number = value as? Int { return number }
+            if let number = value as? Double { return Int(number) }
+            if let text = value as? String, let number = Int(text) { return number }
+            return nil
+        }
+
         private func handleHeartbeat(_ payload: [UInt8]) {
             guard let text = String(bytes: payload, encoding: .utf8),
                   let data = text.data(using: .utf8),
                   let object = try? JSONSerialization.jsonObject(with: data),
                   let json = object as? [String: Any] else { return }
-            if let timestamp = json["timestamp"] as? Int {
+            if let timestamp = Self.eylinkInteger(json["timestamp"]) {
                 carTime = timestamp
-                lastCarTimeAt = ProcessInfo.processInfo.systemUptime
-            } else if let timestamp = json["timestamp"] as? Double {
-                carTime = Int(timestamp)
                 lastCarTimeAt = ProcessInfo.processInfo.systemUptime
             }
             if let version = json["ver"] as? String, !version.isEmpty {
@@ -468,11 +506,11 @@ final class EylinkOutput {
             guard active, !configured, mirrorReady, let mirror else { return }
             startAttempts += 1
             if startAttempts > 15 {
-                if mirrorIsUDP, !triedTCPFallback, !configured {
-                    triedTCPFallback = true
+                if !mirrorIsUDP, !triedUDPFallback, !configured {
+                    triedUDPFallback = true
                     startAttempts = 0
-                    report("UDP 11111 无响应，尝试 TCP 11111…")
-                    openMirror(udp: false)
+                    report("TCP 11111 无响应，回退 UDP 11111…")
+                    openMirror(udp: true)
                     return
                 }
                 stopStartTimer()
@@ -486,7 +524,7 @@ final class EylinkOutput {
             // 仪表心跳里的 carTime 用同一条时间轴，否则会永久进入“只发关键帧”的追帧模式。
             startTime = ProcessInfo.processInfo.systemUptime
             waitingForKeyFrameAfterLag = false
-            mirror.send(content: EylinkPacket.mirrorStart(width: profile.width, height: profile.height),
+            mirror.send(content: EylinkPacket.mirrorStart(width: requestWidth, height: requestHeight),
                         completion: .contentProcessed { _ in })
         }
 

@@ -1,9 +1,9 @@
 # ZXMOTO（500RR / 820R 5 寸）× CarWithin（EYLink 输出）
 
-这个分支给 CarWithin 增加了一个实验性的 **ZXMOTO 5 寸仪表**输出：**500RR 5 寸**与 **820R 5 寸**共用同一套 EYLink 方案，路径与春风（PXC）、极核（Zeeho）不同：
+这个分支给 CarWithin 增加了一个实验性的 **ZXMOTO 仪表**输出：**500RR（5 寸）**与 **820R（6.2 寸 TFT，实际尺寸以仪表 `OK` 包为准）** 共用同一套 EYLink 方案，路径与春风（PXC）、极核（Zeeho）不同：
 
 > 500RR 官方 App 的“投屏导航”调用的是 **EYLink / EryaNet SDK**，不是标准 CarLife，也不是春风 PXC。
-> 手机加入仪表热点 `iteAP` 后，连接 `192.168.43.1` 的 **UDP 11111（P2P 镜像，默认）** / **TCP 11111（BLE 路径回退）** 和 **TCP 11112（控制）**。
+> 手机加入仪表热点 `iteAP` 后，连接 `192.168.43.1` 的 **TCP 11111（镜像，官方无蓝牙时就是这条路）**、**UDP 11111（旧固件回退）** 和 **TCP 11113（控制）**。逐字节的逆向记录见 [docs/ZXMOTO-EYLINK-PROTOCOL.md](docs/ZXMOTO-EYLINK-PROTOCOL.md)。
 
 协议是通过反编译 ZXMOTO Android v1.4.5（`com.zxjc`）中的 `com.eryanet.ite.*` 发送端还原的。CarWithin 现在按同一套包格式，把 CarPlay 画面重新编码成 H.264 后发给仪表。
 
@@ -18,7 +18,7 @@
 - 新增 `App/EylinkOutput.swift`
   - 解析仪表 `OK` 包下发的画面尺寸、帧率、码率；
   - 按 EYLink 12 字节包头封装 `MIRROR_START`、`VIDEO_DATA`、`MIRROR_STOP`；
-  - 镜像默认走 UDP 11111（iteAP/P2P），无响应自动回退 TCP 11111；控制 TCP 11112（只读日志）；
+  - 镜像默认走 TCP 11111（官方 Android App 无蓝牙时就是 TCP），无响应自动回退 UDP 11111；控制 TCP 11113（只读日志）；
   - CarPlay H.264 → 解码 → 缩放/黑边 → 按仪表尺寸重新编码 → 逐帧发送；
   - 关键帧恢复、发送积压限流、仪表时钟追帧。
 - `App/ReceiverConfiguration.swift`
@@ -27,7 +27,7 @@
 - `App/NativeReceiver.swift`
   - 新输出实例、启动、视频帧分发、停止。
 - `App/ReceiverViewController.swift`
-  - 输出菜单新增「ZXMOTO」分组，下面是「张雪 500RR 5 寸」和「张雪 820R 5 寸」；
+  - 输出菜单新增「ZXMOTO」分组，下面是「张雪 500RR 5 寸」和「张雪 820R」；
   - 连接卡片、状态、IP 设置页、画面说明、持久化。
 - `Tools/generate_project.py`
   - 兼容 Windows（无 `plutil`），并用 POSIX 路径写入 pbxproj，保证 macOS 上能找到源文件。
@@ -93,7 +93,7 @@ zip -qry CarWithin-unsigned.ipa Payload
 1. 车辆上电，仪表进入“导航/投屏导航”界面；
 2. iPhone 打开 Wi-Fi，加入仪表热点 **`iteAP`**（密码以仪表/官方 App 显示为准）；
 3. 确认 iPhone 拿到 `192.168.43.x` 地址，仪表是 `192.168.43.1`；
-4. 打开 CarWithin，输出选择 **「ZXMOTO → 张雪 500RR 5 寸 / 张雪 820R 5 寸」**；
+4. 打开 CarWithin，输出选择 **「ZXMOTO → 张雪 500RR 5 寸 / 张雪 820R」**；
 5. 在“连接设置”里确认仪表 IP 为 `192.168.43.1`；
 6. 启动 CarPlay。
 
@@ -120,28 +120,29 @@ EYLink 镜像通道已连接，正在请求仪表开启投屏…
 
 | 通道 | 地址 | 用途 |
 |---|---|---|
-| 镜像 | `192.168.43.1:11111` UDP（iteAP/P2P，默认） | 每个 `MIRROR_START` / `VIDEO_DATA` / `MIRROR_STOP` 是一个独立 datagram，收 `OK` / `TP` / 心跳 |
-| 镜像回退 | `192.168.43.1:11111` TCP | BLE/非 P2P 路径；UDP 无响应时尝试 |
-| 控制 | `192.168.43.1:11112` TCP | `EY` JSON 帧，官方用于导航/状态同步；本实现只读日志，不作为启动镜像的前置条件 |
+| 镜像 | `192.168.43.1:11111` TCP（无蓝牙、手动连热点的路径，默认） | 连上后每 500ms 发一次 `MIRROR_START`，收 `OK` / `TP` / 心跳帧；随后逐帧写 `VIDEO_DATA` |
+| 镜像回退 | `192.168.43.1:11111` UDP | 旧固件/BLE 分支；TCP 无响应时尝试，本机绑定 Wi-Fi 地址:11111 |
+| 控制 | `192.168.43.1:11113` TCP | `EY` JSON 帧，官方用于导航/状态同步；本实现只读日志，不作为启动镜像的前置条件 |
 | 热点 | `iteAP` | 仪表创建，手机加入 |
 
 ### 4.2 12 字节包头
 
 ```text
-AA BB CC <func> 00 00 00 00 <uint32BE payloadLen> <payload>
+AA BB CC <func> 00 00 00 00 <uint32LE payloadLen> <payload>
 ```
 
-- 始终写 `payloadLen`（无 payload 时为 0，`MIRROR_STOP` 是 12 字节空包）；
-- `func 0` = `VIDEO_DATA`，payload = `uint32BE timestampMs + Annex-B H.264`；
-- `func 4` = `MIRROR_START`，payload = `uint16BE min(w,h) + uint16BE max(w,h)`；
-- `func 5` = `MIRROR_STOP`，无 payload（12 字节空包）。
+- 长度字段是**小端**（官方 `ByteUtil.intTo4Bytes`）；bytes[4..7] 始终为 0；
+- `func 0` = `VIDEO_DATA`，payload = `uint32LE timestampMs + Annex-B H.264`；
+- `func 4` = `MIRROR_START`，payload = `uint16LE min(w,h) + uint16LE max(w,h)`（手机屏幕像素尺寸，长边压到 2560 以内）；
+- `func 5` = `MIRROR_STOP`，无 payload（12 字节空包）；
+- `func 6` = `WIDTH_HEIGHT`，payload = `uint16LE w + uint16LE h`（官方每 2s 发一次，本实现没有用到）。
 
-`MIRROR_START` 每 500ms 重发一次，最多 15 次；UDP 静默无响应时自动改用 TCP 11111 再试一轮；收到 `OK` 后停止。
+`MIRROR_START` 每 500ms 重发一次，最多 15 次；TCP 静默无响应时自动回退 UDP 11111 再试一轮；收到 `OK` 后停止。
 
 ### 4.3 仪表 `OK` 包（13 字节）
 
 ```text
-'O' 'K' | portraitW u16BE | portraitH u16BE | landscapeW u16BE | landscapeH u16BE | fps u8 | bitrateKbps u16BE
+'O' 'K' | portraitW u16LE | portraitH u16LE | landscapeW u16LE | landscapeH u16LE | fps u8 | bitrateKbps u16LE
 ```
 
 - 宽高为奇数时 +1；
@@ -158,11 +159,11 @@ AA BB CC <func> 00 00 00 00 <uint32BE payloadLen> <payload>
 
 ## 5. 已知限制
 
-- **未做 BLE/扫码握手**：官方 `LinkFragment.startConnect()` 必须先有 GATT 连接；本实现只走手动 Wi-Fi。P2P/iteAP 路径官方使用 UDP 11111，本实现已按 UDP 发送并绑定本机 Wi-Fi 地址:11111（不是 0.0.0.0），收不到 `OK` 会回退 TCP。
+- **未做 BLE/扫码握手**：官方 App 先通过 BLE/扫码把仪表切到投屏态；本实现只走手动 Wi-Fi。无蓝牙时官方 Android 走 TCP 11111，本实现同样以 TCP 11111 为主、UDP 11111 回退。
 - **UDP 大包**：H.264 关键帧可能超过单个 Wi-Fi MTU，依赖 IP 分片；若仪表丢大包，需要改小关键帧或让仪表协商更低码率。
 - **未实车验证**：仪表是否接受第三方发送端、`OK` 尺寸是否与 500RR/820R 5 寸一致，需要上车测试。
 - **没有音频**：和 CarWithin 其他仪表输出一样，声音留在 iPhone/蓝牙。
-- **控制通道未实现业务握手**：只读日志；如果仪表要求 11112 上先发特定 JSON，需要按实车日志补。
+- **控制通道未实现业务握手**：只读日志；如果仪表要求 11113 上先发特定 JSON，需要按实车日志补。
 - **H.264 参数**：使用 VideoToolbox Baseline；若仪表只接受特定 profile/level，需要调整。
 - **安全**：只在停车/驻车时调试，不要在骑行中操作手机或仪表。
 

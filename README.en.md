@@ -141,13 +141,14 @@ Video and recovery after locking the iPhone have been confirmed on one instrumen
 
 Join the dashboard Wi-Fi on the iPhone, select the corresponding CFMOTO output, enable dashboard projection and start CarPlay. Set the dashboard address in Output settings. Leaving it blank tries `.1` on the local subnet; this is a guess, not a discovered DHCP gateway. Enter the real address if it fails. A separate PXC session uses TCP 10920/10921/10922 and probe port 10930, with negotiated, aligned video dimensions. Audio and controls remain on the iPhone or its Bluetooth device. The maintainer has no CFMOTO dashboard, so connection, video and background behavior need hardware testing.
 
-### ZXMOTO 500RR / 820R 5-inch dashboard (experimental)
+### ZXMOTO 500RR / 820R dashboard (experimental)
 
 The 500RR and 820R projection-navigation uses EYLink / EryaNet, not CarLife or CFMOTO PXC. Join the
-dashboard's `iteAP` hotspot, choose `ZXMOTO → 张雪 500RR 5 寸 / 张雪 820R 5 寸` under Current output,
+dashboard's `iteAP` hotspot, choose `ZXMOTO → 张雪 500RR 5 寸 / 张雪 820R` under Current output,
 confirm the dashboard IP is `192.168.43.1` (editable under Output settings), open projection navigation on the
-dashboard, then start CarPlay. The P2P/iteAP mirror channel defaults to UDP 11111, falls back
-to TCP 11111 when UDP gets no response; the control channel is TCP 11112.
+dashboard, then start CarPlay. The mirror channel is TCP 11111 first (the official Android path when no
+Bluetooth is used) and falls back to UDP 11111; the control channel is TCP 11113, and the actual video
+size is negotiated by the dashboard's `OK` reply.
 The protocol was reverse engineered from the ZXMOTO app. The official BLE/QR handshake is not
 implemented; if it stalls at "requesting projection", trigger projection with the official app
 first or add the BLE flow. Not yet validated on a real 500RR/820R. The default build does not embed
