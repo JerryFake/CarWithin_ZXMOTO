@@ -43,7 +43,7 @@ struct ReceiverConfiguration {
     var eryaVideoPort: UInt16 = 11111
     var eryaControlPort: UInt16 = 11113
     var motorcycleBluetoothID: UUID?
-    /// ZXMOTO（EYLink / EryaNet）：手机加入仪表热点 `iteAP` 后直连 192.168.43.1，
+    /// ZXMOTO（EYLink / EryaNet）：手机加入仪表热点（`iteAP` 或 `ZXMOTO-…`）后直连 192.168.43.1，
     /// 镜像走 TCP 11111（旧固件回退 UDP 11111），控制 TCP 11113。
     /// 留空默认 192.168.43.1。
     var eylinkAddress: String?

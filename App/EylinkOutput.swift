@@ -6,7 +6,7 @@ import VideoToolbox
 
 /// ZXMOTO 仪表（EYLink / EryaNet）的输出规格。
 ///
-/// 500RR 与 820R 的“投屏导航”都走 EYLink：手机加入仪表热点 `iteAP` 后直连 `192.168.43.1`：
+/// 500RR 与 820R 的“投屏导航”都走 EYLink：手机加入仪表热点（`iteAP` 或 `ZXMOTO-…`）后直连 `192.168.43.1`：
 /// - TCP 11111：镜像通道（官方 Android App 在无蓝牙/手动连热点时走 TCP），
 ///   收 `OK` 画面参数、发 `MIRROR_START` 与 H.264 帧；
 /// - UDP 11111：旧固件的镜像通道（本实现作为回退）；
@@ -221,7 +221,7 @@ final class EylinkOutput {
             }
             queue.asyncAfter(deadline: .now() + 12) { [weak self] in
                 guard let self, self.active, !self.mirrorReady, !self.configured else { return }
-                self.report("ZXMOTO 仪表未连接：请确认 iPhone 已加入 iteAP 热点，且仪表 IP 为 192.168.43.1")
+                self.report("ZXMOTO 仪表未连接：请确认 iPhone 已加入仪表热点（iteAP 或 ZXMOTO-…），且仪表 IP 为 192.168.43.1")
             }
         }
 
