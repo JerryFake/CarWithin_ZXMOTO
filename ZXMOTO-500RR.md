@@ -1,6 +1,6 @@
-# 张雪 500RR × CarWithin（EYLink 输出）
+# ZXMOTO（500RR / 820R 5 寸）× CarWithin（EYLink 输出）
 
-这个分支给 CarWithin 增加了一个实验性的 **张雪 500RR 5 寸仪表**输出，路径与春风（PXC）、极核（Zeeho）不同：
+这个分支给 CarWithin 增加了一个实验性的 **ZXMOTO 5 寸仪表**输出：**500RR 5 寸**与 **820R 5 寸**共用同一套 EYLink 方案，路径与春风（PXC）、极核（Zeeho）不同：
 
 > 500RR 官方 App 的“投屏导航”调用的是 **EYLink / EryaNet SDK**，不是标准 CarLife，也不是春风 PXC。
 > 手机加入仪表热点 `iteAP` 后，连接 `192.168.43.1` 的 **UDP 11111（P2P 镜像，默认）** / **TCP 11111（BLE 路径回退）** 和 **TCP 11112（控制）**。
@@ -27,7 +27,7 @@
 - `App/NativeReceiver.swift`
   - 新输出实例、启动、视频帧分发、停止。
 - `App/ReceiverViewController.swift`
-  - 输出菜单新增“张雪 500RR 5 寸”；
+  - 输出菜单新增「ZXMOTO」分组，下面是「张雪 500RR 5 寸」和「张雪 820R 5 寸」；
   - 连接卡片、状态、IP 设置页、画面说明、持久化。
 - `Tools/generate_project.py`
   - 兼容 Windows（无 `plutil`），并用 POSIX 路径写入 pbxproj，保证 macOS 上能找到源文件。
@@ -93,14 +93,14 @@ zip -qry CarWithin-unsigned.ipa Payload
 1. 车辆上电，仪表进入“导航/投屏导航”界面；
 2. iPhone 打开 Wi-Fi，加入仪表热点 **`iteAP`**（密码以仪表/官方 App 显示为准）；
 3. 确认 iPhone 拿到 `192.168.43.x` 地址，仪表是 `192.168.43.1`；
-4. 打开 CarWithin，输出选择 **“张雪 500RR 5 寸”**；
+4. 打开 CarWithin，输出选择 **「ZXMOTO → 张雪 500RR 5 寸 / 张雪 820R 5 寸」**；
 5. 在“连接设置”里确认仪表 IP 为 `192.168.43.1`；
 6. 启动 CarPlay。
 
 正常时状态会依次显示：
 
 ```text
-正在连接张雪 500RR 仪表…
+正在连接 ZXMOTO 仪表…
 EYLink 镜像通道已连接，正在请求仪表开启投屏…
 仪表已就绪 · 800×480 · 30 FPS
 正在投屏 · 800×480 · H.264
@@ -160,7 +160,7 @@ AA BB CC <func> 00 00 00 00 <uint32BE payloadLen> <payload>
 
 - **未做 BLE/扫码握手**：官方 `LinkFragment.startConnect()` 必须先有 GATT 连接；本实现只走手动 Wi-Fi。P2P/iteAP 路径官方使用 UDP 11111，本实现已按 UDP 发送并绑定本机 Wi-Fi 地址:11111（不是 0.0.0.0），收不到 `OK` 会回退 TCP。
 - **UDP 大包**：H.264 关键帧可能超过单个 Wi-Fi MTU，依赖 IP 分片；若仪表丢大包，需要改小关键帧或让仪表协商更低码率。
-- **未实车验证**：仪表是否接受第三方发送端、`OK` 尺寸是否与 500RR 5 寸一致，需要上车测试。
+- **未实车验证**：仪表是否接受第三方发送端、`OK` 尺寸是否与 500RR/820R 5 寸一致，需要上车测试。
 - **没有音频**：和 CarWithin 其他仪表输出一样，声音留在 iPhone/蓝牙。
 - **控制通道未实现业务握手**：只读日志；如果仪表要求 11112 上先发特定 JSON，需要按实车日志补。
 - **H.264 参数**：使用 VideoToolbox Baseline；若仪表只接受特定 profile/level，需要调整。

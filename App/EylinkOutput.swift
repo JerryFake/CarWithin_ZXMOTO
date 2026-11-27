@@ -3,10 +3,9 @@ import Foundation
 import Network
 import VideoToolbox
 
-/// 张雪 500RR 仪表（EYLink / EryaNet）的输出规格。
+/// ZXMOTO 仪表（EYLink / EryaNet）的输出规格。
 ///
-/// 500RR 官方 App 的“投屏导航”实际调用的是 `com.eryanet.sdk.EryaSDK`，
-/// 手机加入仪表热点 `iteAP` 后直连 `192.168.43.1`：
+/// 500RR 与 820R 的“投屏导航”都走 EYLink：手机加入仪表热点 `iteAP` 后直连 `192.168.43.1`：
 /// - UDP 11111：P2P/iteAP 路径的镜像通道，收 `OK` 画面参数、发 `MIRROR_START` 与 H.264 帧；
 /// - TCP 11111：BLE 扫码路径的镜像通道（本实现作为回退）；
 /// - TCP 11112：控制通道，收发 `EY` JSON 帧（可选，本实现只用来读日志）。
@@ -20,7 +19,11 @@ struct EylinkProfile: Equatable {
     let label: String
 
     static let zxmoto500rr = EylinkProfile(width: 800, height: 480, fps: 30, bitrate: 4_000_000,
-                                           label: "张雪 500RR")
+                                           label: "张雪 500RR 5 寸")
+
+    /// 820R 按用户确认的 5 寸仪表处理；实际尺寸仍以仪表 `OK` 包协商结果为准。
+    static let zxmoto820r = EylinkProfile(width: 800, height: 480, fps: 30, bitrate: 4_000_000,
+                                          label: "张雪 820R 5 寸")
 
     var encodeWidth: Int { width - width % 2 }
     var encodeHeight: Int { height % 2 == 0 ? height : height + 1 }
@@ -72,7 +75,7 @@ private enum EylinkPacket {
     }
 }
 
-/// 张雪 500RR 投屏输出：把 CarPlay 的 H.264 解回像素，缩放成仪表协商尺寸重新编码，
+/// ZXMOTO 投屏输出：把 CarPlay 的 H.264 解回像素，缩放成仪表协商尺寸重新编码，
 /// 再按 EYLink 的镜像协议逐帧发送。
 final class EylinkOutput {
     private let queue: DispatchQueue
@@ -361,7 +364,7 @@ final class EylinkOutput {
                 return
             }
             let reason = error?.localizedDescription ?? "连接已关闭"
-            report("张雪 500RR 镜像连接断开：\(reason)")
+            report("ZXMOTO 镜像连接断开：\(reason)")
         }
 
         private func consumeMirror(_ bytes: [UInt8], datagram: Bool = false) {

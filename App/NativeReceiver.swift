@@ -187,7 +187,7 @@ final class NativeReceiver {
                 self.eylink.start(localAddress: configuration.address, targetAddress: target, profile: profile,
                                   onState: { [weak self] in self?.onEylinkState?($0) },
                                   onLog: { [weak self] in self?.log($0) },
-                                  requestKeyframe: { [weak self] in self?.requestKeyFrame(reason: "张雪 500RR 解码恢复") })
+                                  requestKeyframe: { [weak self] in self?.requestKeyFrame(reason: "ZXMOTO 解码恢复") })
             }
             if let target = configuration.ninebotAddress {
                 self.ninebot.start(localAddress: configuration.address, targetAddress: target, mode: configuration.ninebotMode,

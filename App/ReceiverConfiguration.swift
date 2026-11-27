@@ -43,7 +43,7 @@ struct ReceiverConfiguration {
     var eryaVideoPort: UInt16 = 11111
     var eryaControlPort: UInt16 = 11113
     var motorcycleBluetoothID: UUID?
-    /// 张雪 500RR（EYLink / EryaNet）：手机加入仪表热点 `iteAP` 后直连 192.168.43.1，
+    /// ZXMOTO（EYLink / EryaNet）：手机加入仪表热点 `iteAP` 后直连 192.168.43.1，
     /// P2P 镜像默认 UDP 11111（TCP 11111 为 BLE 路径回退），控制 TCP 11112。
     /// 留空默认 192.168.43.1。
     var eylinkAddress: String?
@@ -201,7 +201,7 @@ struct ReceiverConfiguration {
                   !eylinkAddress.hasPrefix("127."), !eylinkAddress.hasPrefix("0."),
                   !eylinkAddress.hasPrefix("169.254."), UInt32(bigEndian: target.s_addr) < 0xe0000000,
                   !eylinkAddress.hasSuffix(".0"), !eylinkAddress.hasSuffix(".255") else {
-                throw ConfigurationError(CWL("请输入张雪 500RR 仪表真实的 IPv4 地址（不能用 .0/.255），默认 192.168.43.1。"))
+                throw ConfigurationError(CWL("请输入 ZXMOTO 仪表真实的 IPv4 地址（不能用 .0/.255），默认 192.168.43.1。"))
             }
         }
         if let ninebotAddress {
