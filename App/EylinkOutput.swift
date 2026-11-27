@@ -57,6 +57,7 @@ private enum EylinkPacket {
     static let videoFunction: UInt8 = 0
     static let mirrorStartFunction: UInt8 = 4
     static let mirrorStopFunction: UInt8 = 5
+    static let widthHeightFunction: UInt8 = 6
 
     static func packet(function: UInt8, payload: Data = Data()) -> Data {
         var data = Data([0xAA, 0xBB, 0xCC, function, 0, 0, 0, 0])
@@ -72,6 +73,14 @@ private enum EylinkPacket {
         appendUInt16(UInt16(clamping: min(width, height)), to: &payload)
         appendUInt16(UInt16(clamping: max(width, height)), to: &payload)
         return packet(function: mirrorStartFunction, payload: payload)
+    }
+
+    /// WIDTH_HEIGHT（官方 Android 每 2 秒发一次当前手机窗口尺寸）。
+    static func widthHeight(width: Int, height: Int) -> Data {
+        var payload = Data()
+        appendUInt16(UInt16(clamping: width), to: &payload)
+        appendUInt16(UInt16(clamping: height), to: &payload)
+        return packet(function: widthHeightFunction, payload: payload)
     }
 
     static func video(_ frame: Data, timestamp: UInt32) -> Data {
@@ -162,6 +171,7 @@ final class EylinkOutput {
         private var requestHeight: Int
         private var startTimer: DispatchSourceTimer?
         private var startAttempts = 0
+        private var lastSizeReport: TimeInterval = 0
 
         private var encodeWidth: Int
         private var encodeHeight: Int
@@ -221,7 +231,7 @@ final class EylinkOutput {
             }
             queue.asyncAfter(deadline: .now() + 12) { [weak self] in
                 guard let self, self.active, !self.mirrorReady, !self.configured else { return }
-                self.report("ZXMOTO 仪表未连接：请确认 iPhone 已加入仪表热点（iteAP 或 ZXMOTO-…），且仪表 IP 为 192.168.43.1")
+                self.report("ZXMOTO 仪表未连接：请确认 iPhone 已加入仪表热点（iteAP 或 ZXMOTO-…）")
             }
         }
 
@@ -638,6 +648,16 @@ final class EylinkOutput {
             guard let mirror, mirrorReady else {
                 lock.withLock { inFlight -= 1 }
                 return
+            }
+            // 官方 Android 每 2 秒补一个 WIDTH_HEIGHT，参考实现也把它放在首个 IDR 前。
+            // 这里按横屏（长边在前）上报手机窗口尺寸，便于仪表决定镜像区域的摆放。
+            let now = ProcessInfo.processInfo.systemUptime
+            if now - lastSizeReport >= 2 {
+                lastSizeReport = now
+                let landscapeWidth = max(requestWidth, requestHeight)
+                let landscapeHeight = min(requestWidth, requestHeight)
+                mirror.send(content: EylinkPacket.widthHeight(width: landscapeWidth, height: landscapeHeight),
+                            completion: .contentProcessed { _ in })
             }
             let packet = EylinkPacket.video(frame.data, timestamp: timestamp)
             mirror.send(content: packet, completion: .contentProcessed { [weak self] error in

@@ -45,7 +45,7 @@ struct ReceiverConfiguration {
     var motorcycleBluetoothID: UUID?
     /// ZXMOTO（EYLink / EryaNet）：手机加入仪表热点（`iteAP` 或 `ZXMOTO-…`）后直连 192.168.43.1，
     /// 镜像走 TCP 11111（旧固件回退 UDP 11111），控制 TCP 11113。
-    /// 留空默认 192.168.43.1。
+    /// 留空时自动取手机 IP 网段的 .1（如 192.168.21.1 / 192.168.43.1）。
     var eylinkAddress: String?
     var eylinkProfile: EylinkProfile?
     var ninebotAddress: String?

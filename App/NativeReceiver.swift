@@ -183,7 +183,10 @@ final class NativeReceiver {
                 }
             }
             if let profile = configuration.eylinkProfile {
-                let target = configuration.eylinkAddress.flatMap({ $0.isEmpty ? nil : $0 }) ?? "192.168.43.1"
+                // 仪表 IP 默认取手机所在网段的网关（.1）：ZXMOTO 仪表常见的网段有
+                // 192.168.21.x（第三方 1.0.9 参考实现）与 192.168.43.x（EYLink 默认）。
+                let target = configuration.eylinkAddress.flatMap({ $0.isEmpty ? nil : $0 })
+                    ?? PxcConnection.gateway(for: configuration.address) ?? "192.168.43.1"
                 self.eylink.start(localAddress: configuration.address, targetAddress: target, profile: profile,
                                   onState: { [weak self] in self?.onEylinkState?($0) },
                                   onLog: { [weak self] in self?.log($0) },

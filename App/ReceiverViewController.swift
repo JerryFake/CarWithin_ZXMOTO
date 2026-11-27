@@ -3153,7 +3153,7 @@ extension ReceiverViewController {
                 rows.append(.note(zeehoStatus))
                 return [SettingsSection(name, footer: CWL("先在 CarWithin 点“启动本机 CarPlay”。若仪表没出画，保持 CarWithin 运行，再去极核 APP 打开仪表投屏导航。仪表出画后立刻切回或划掉极核 APP。声音由 iPhone 或蓝牙输出。"), rows)]
             case .zxmoto500rr, .zxmoto820r:
-                return [SettingsSection(headUnitOutput.selectedTitle, footer: "iPhone 加入 ZXMOTO 仪表 Wi-Fi（热点名一般是 iteAP 或 ZXMOTO-…），在仪表打开投屏导航后启动 CarPlay。500RR 与 820R 都走同一套 EYLink 协议：镜像走 TCP 11111（失败回退 UDP 11111），控制 TCP 11113；网关默认 192.168.43.1，实际画面尺寸由仪表回到的 OK 包协商。BLE 扫码握手暂未实现，若手动连接无画面请提交日志。", [
+                return [SettingsSection(headUnitOutput.selectedTitle, footer: "iPhone 加入 ZXMOTO 仪表 Wi-Fi（热点名一般是 iteAP 或 ZXMOTO-…），在仪表打开投屏导航后启动 CarPlay。500RR 与 820R 都走同一套 EYLink 协议：镜像走 TCP 11111（失败回退 UDP 11111），控制 TCP 11113；网关默认取手机 IP 网段的 .1（常见 192.168.21.1 或 192.168.43.1），实际画面尺寸由仪表回到的 OK 包协商。BLE 扫码握手暂未实现，若手动连接无画面请提交日志。", [
                     .field(CWL("仪表 IP 地址"), eylinkAddressField, placeholder: "192.168.43.1"),
                     .note(eylinkStatus)
                 ])]
