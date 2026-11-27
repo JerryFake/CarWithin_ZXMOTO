@@ -100,3 +100,22 @@ func（`Parser.Func`）：
 - 心跳/时间同步语义：OK 之后仪表会以 AA BB CC 0F + 8 字节 + u32 LE 长度 + JSON 发 er/ck/	imestamp；12 秒收不到 er 视为链路断开。
 
 详见 docs/eymirror-protocol.md（含符号地址与 v2 结构体候选布局）。
+
+## 附：第三方 1.0.9 IPA 的 ZxDash 与 EYLink 的关系（2026-11-28）
+
+第三方 500RR 实现（TDSCarKit 1.0.9）的帧格式是 `AA BB CC | LE32 type | u8 flag | LE32 payloadLen | payload`。
+与本文 EYLink 的 `AA BB CC | u8 func | 00 00 00 00 | LE32 payloadLen` 对比可知：
+
+- EYLink 的 `func` 恰好等于 ZxDash 的 `LE32 type` 的低字节（type ∈ 0..6），字段位置完全一致；
+- `flag` 在参考实现里普通帧恒为 0，与 EYLink 的 4 个零字节中的第 4 字节吻合；
+- `payloadLen` 位置相同（bytes 8..11，LE32）。
+
+因此两套实现发出的帧在 type ≤ 255 时**逐字节相同**，同一台仪表可以接受；差异只在应用层时序：
+
+- MIRROR_START/hello 携带手机横竖屏像素（min/max LE16），两个实现一致；
+- 参考实现在首个 IDR 前额外发 SPS、PPS 两个 VIDEO_DATA 包和一个 WIDTH_HEIGHT（func 6）；
+- 参考实现连上 11113 后发时间同步 JSON `{"data":{"timeZone":"8","timestamp":"<epoch>"},"fun":"time"}`，并每 60 秒重复；
+- 参考实现默认仪表地址是 **192.168.21.1**（`EylinkProfile.defaultAddress`）——说明 ZXMOTO 仪表的 AP 网段可能是 192.168.21.x 而不是 EryaNet 默认的 192.168.43.x；本实现因此改为按手机 IP 自动推导网关 `.1`，并允许在设置里手动覆盖；
+- 参考实现只走 TCP 11111 + TCP 11113，无 UDP 回退。
+
+如果实车仍连不上，优先核对仪表热点网段与 192.168.21.1 / 192.168.43.1 两个候选地址，其次才是协议层。详见 `docs/zxdash-protocol.md`。
