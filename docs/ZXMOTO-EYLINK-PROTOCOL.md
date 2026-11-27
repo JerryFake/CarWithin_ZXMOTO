@@ -90,3 +90,13 @@ func（`Parser.Func`）：
 
 - 仪表热点是否有密码、是否必须先经 BLE 配对才开放 11111/11113。
 - 820R（6.2 寸，可能 1280x720/1280x480 类）回包尺寸与 500RR 是否相同；实现应完全采用 OK 回包参数，只把尺寸作为 MIRROR_START 初始值。
+
+## 附：官方 iOS App 侧证据（补充，2026-11-28）
+
+官方 iOS App 的 ReplayKit 扩展 MotorMirror.appex 代码受 FairPlay 加密，但从明文导出符号 + 主 App 字符串可确认：
+
+- iPhone 端加入的热点除老车 iteAP 外，官方 iOS App 也会用 ZXMOTO-… 前缀热点（App 内 HotspotStatus/hotspotPassword/pplyHotspotConfiguration 走 NEHotspotConfiguration，CarWithin 无法自动加入，只能手动）。
+- iOS 扩展是**服务端**设计（indServerPortInRange(_:socket:retryCount:)、didAcceptNewSocket、随机 command/data 端口 + UDP 广播端口信息），与 Android v1 的直连 11111 不同，属于 EYMirror v2；v2 多字节字段为大端，且只用于官方 App ↔ 扩展之间，仪表投屏主线仍是本文件描述的 EYLink v1。
+- 心跳/时间同步语义：OK 之后仪表会以 AA BB CC 0F + 8 字节 + u32 LE 长度 + JSON 发 er/ck/	imestamp；12 秒收不到 er 视为链路断开。
+
+详见 docs/eymirror-protocol.md（含符号地址与 v2 结构体候选布局）。
