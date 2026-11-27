@@ -150,7 +150,10 @@ dashboard, then start CarPlay. The P2P/iteAP mirror channel defaults to UDP 1111
 to TCP 11111 when UDP gets no response; the control channel is TCP 11112.
 The protocol was reverse engineered from the ZXMOTO app. The official BLE/QR handshake is not
 implemented; if it stalls at "requesting projection", trigger projection with the official app
-first or add the BLE flow. Not yet validated on a real 500RR. [Protocol, build and debug notes](ZXMOTO-500RR.md).
+first or add the BLE flow. Not yet validated on a real 500RR. The default build does not embed
+an MFi identity; after installation you still import `certificate.p7b`, `leaf.cer`, and
+`private.x963` in the app. The CarPlay accessory authentication itself cannot be removed.
+[Protocol, build and debug notes](ZXMOTO-500RR.md).
 
 ### ANT BMS battery cards
 

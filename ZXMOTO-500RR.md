@@ -7,7 +7,7 @@
 
 协议是通过反编译 ZXMOTO Android v1.4.5（`com.zxjc`）中的 `com.eryanet.ite.*` 发送端还原的。CarWithin 现在按同一套包格式，把 CarPlay 画面重新编码成 H.264 后发给仪表。
 
-> **状态：源码级适配，尚未在 500RR 实车上验证。**
+> **状态：基于上游 1.0.6 的源码适配，GitHub Actions macOS 构建已通过（`BUILD SUCCEEDED`），尚未在 500RR 实车上验证。**
 > 本机是 Windows，没有 Xcode，不能本地编译 IPA；请用 GitHub Actions 或 macOS 构建。
 > 官方启动流程还包含 BLE/扫码握手，本实现没有做 BLE，因此“手动连 Wi-Fi 直连”能否让仪表开启镜像端口，需要实车确认。
 
@@ -74,15 +74,17 @@ cp -R build/source/Build/Products/Release-iphoneos/TDSCarKit.app Payload/
 zip -qry CarWithin-unsigned.ipa Payload
 ```
 
-> unsigned IPA 不能直接安装。需要用 AltStore / SideStore / TrollStore 等工具签名安装；
-> 本机 CarPlay 接收还需要配件认证身份。源码不含身份文件；如果已有 CarWithin 1.0.5 的
-> `certificate.p7b`、`leaf.cer`、`private.x963`，可放到 `App/BundledIdentity/` 后重新生成工程，
-> 或通过 App 的 `Documents/IdentityImport` 导入。不要把身份文件提交到公开仓库。
+> unsigned IPA 不能直接安装。需要用 AltStore / SideStore / TrollStore 等工具签名安装。
 >
-> 当前工作区已把这三个文件放在 `App/BundledIdentity/`（已被 `.gitignore` 忽略），
-> 本地 macOS 构建会直接打进 App；GitHub Actions 从干净仓库构建时不会包含它们，
-> 安装后请在“文件”App 的“我的 iPhone → CarWithin”里把三个文件放进 `IdentityImport` 文件夹，
-> 再按 App 内提示导入。
+> **本版本按“无 MFi 认证”的要求构建：不把 CarPlay 配件身份打进 App。** 但 CarPlay 接收
+> 本身仍然需要 MFi 身份，这一步无法从协议层去掉；没有身份时 App 会停在“尚未导入有效的
+> MFi 身份”。源码和 CI 构建产物都不含身份文件。安装后请在“文件”App 的
+> “我的 iPhone → CarWithin”里把 `certificate.p7b`、`leaf.cer`、`private.x963` 放进
+> `IdentityImport` 文件夹，再按 App 内提示导入；身份文件会存入本机 Keychain。
+>
+> 如果你确实需要“装完不再提示导入”的内嵌身份包，可把三个文件放到 `App/BundledIdentity/`
+> 后重新生成工程并本地构建（`.gitignore` 已忽略该目录）。这仍然不是“去掉认证”，只是把身份
+> 随包携带；不要把含私钥的 IPA 或身份文件提交到公开仓库。
 
 ---
 
