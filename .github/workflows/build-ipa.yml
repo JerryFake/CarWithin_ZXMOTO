@@ -3,7 +3,7 @@ name: Build unsigned IPA
 on:
   workflow_dispatch:
   push:
-    branches: [main, master, zxmoto-500rr]
+    branches: [main, master, zxmoto-500rr, zxmoto-500rr-upstream]
     paths:
       - 'App/**'
       - 'Sources/**'
