@@ -172,6 +172,7 @@ final class EylinkOutput {
         private var startTimer: DispatchSourceTimer?
         private var startAttempts = 0
         private var lastSizeReport: TimeInterval = 0
+        private var reportedLocalNetworkHint = false
 
         private var encodeWidth: Int
         private var encodeHeight: Int
@@ -222,6 +223,10 @@ final class EylinkOutput {
 
         func start() {
             report("正在连接\(profile.label)仪表…")
+            onLog("EYLink 目标 \(targetAddress)：镜像 TCP 11111、控制 TCP 11113；本机 Wi-Fi 地址 \(localAddress ?? "未检测到")")
+            if localAddress?.isEmpty != false {
+                onLog("未检测到本机 Wi-Fi 地址：请先在 设置 → Wi-Fi 加入仪表热点（iteAP 或 ZXMOTO-…）再启动")
+            }
             queue.async { [self] in
                 openMirror(udp: false)
                 openControl()
@@ -231,7 +236,7 @@ final class EylinkOutput {
             }
             queue.asyncAfter(deadline: .now() + 12) { [weak self] in
                 guard let self, self.active, !self.mirrorReady, !self.configured else { return }
-                self.report("ZXMOTO 仪表未连接：请确认 iPhone 已加入仪表热点（iteAP 或 ZXMOTO-…）")
+                self.report("ZXMOTO 仪表未连接：请确认 iPhone 已加入仪表热点（iteAP 或 ZXMOTO-…）；若连接日志出现 Network is down，请重启 iPhone 后再试")
             }
         }
 
@@ -276,7 +281,6 @@ final class EylinkOutput {
                 // 某些仪表固件会固定向手机 11111 回 OK，因此这里也绑定同端口。
                 // 必须绑定到本机 Wi-Fi 地址，不能绑 0.0.0.0（NWConnection 不接受通配地址）。
                 let parameters = NWParameters.udp
-                parameters.requiredInterfaceType = .wifi
                 if let localAddress, !localAddress.isEmpty,
                    let localPort = NWEndpoint.Port(rawValue: 11111) {
                     parameters.requiredLocalEndpoint = .hostPort(host: NWEndpoint.Host(localAddress),
@@ -289,9 +293,11 @@ final class EylinkOutput {
             tcp.enableKeepalive = true
             tcp.keepaliveIdle = 5
             tcp.connectionTimeout = 8
-            let parameters = NWParameters(tls: nil, tcp: tcp)
-            parameters.requiredInterfaceType = .wifi
-            return parameters
+            // 不要设置 requiredInterfaceType = .wifi：iOS 18/26 上强制接口类型
+            // 在本机 Wi-Fi 路径未被系统判定为“可用”时会直接返回
+            // POSIX 50 (Network is down)，连接连 TCP SYN 都发不出去。
+            // 目标是同网段/本机网段的私有地址，系统默认就会走 Wi-Fi。
+            return NWParameters(tls: nil, tcp: tcp)
         }
 
         private func openMirror(udp: Bool = false) {
@@ -336,7 +342,8 @@ final class EylinkOutput {
                 }
                 beginStartTimer()
             case .waiting(let error):
-                onLog("EYLink 等待网络：\(error.localizedDescription)")
+                onLog("EYLink 等待网络：\(Self.describe(error))")
+                if Self.isNetworkDown(error) { noteLocalNetworkBlocked() }
             case .failed(let error):
                 mirrorFailed(error)
             case .cancelled:
@@ -351,11 +358,39 @@ final class EylinkOutput {
             switch state {
             case .ready:
                 receiveControl()
+            case .waiting(let error):
+                onLog("EYLink 控制通道等待网络：\(Self.describe(error))")
+                if Self.isNetworkDown(error) { noteLocalNetworkBlocked() }
             case .failed(let error):
                 onLog("EYLink 控制通道失败：\(error.localizedDescription)")
             default:
                 break
             }
+        }
+
+        private static func describe(_ error: Error?) -> String {
+            guard let error else { return "未知错误" }
+            if let networkError = error as? NWError {
+                switch networkError {
+                case .posix(let code): return "POSIX \(code.rawValue) (\(code))"
+                case .dns(let code): return "DNS \(code)"
+                case .tls(let status): return "TLS \(status)"
+                @unknown default: return String(describing: networkError)
+                }
+            }
+            return error.localizedDescription
+        }
+
+        private static func isNetworkDown(_ error: Error?) -> Bool {
+            guard let networkError = error as? NWError else { return false }
+            if case .posix(let code) = networkError { return code == .ENETDOWN }
+            return false
+        }
+
+        private func noteLocalNetworkBlocked() {
+            guard !reportedLocalNetworkHint else { return }
+            reportedLocalNetworkHint = true
+            onLog("本地网络被系统拦截（Network is down / POSIX 50）：请到 设置 → 隐私与安全性 → 本地网络 确认 CarWithin 已允许；iOS 18/26 有“已授权仍报错”的已知问题，需重启 iPhone 后重试。")
         }
 
         private func receiveMirror() {

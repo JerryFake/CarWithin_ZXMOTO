@@ -144,14 +144,17 @@ Join the dashboard Wi-Fi on the iPhone, select the corresponding CFMOTO output, 
 ### ZXMOTO 500RR / 820R dashboard (experimental)
 
 The 500RR and 820R projection-navigation uses EYLink / EryaNet, not CarLife or CFMOTO PXC. Join the
-dashboard's `iteAP` hotspot, choose `ZXMOTO → 张雪 500RR 5 寸 / 张雪 820R` under Current output,
-confirm the dashboard IP is `192.168.43.1` (editable under Output settings), open projection navigation on the
-dashboard, then start CarPlay. The mirror channel is TCP 11111 first (the official Android path when no
-Bluetooth is used) and falls back to UDP 11111; the control channel is TCP 11113, and the actual video
-size is negotiated by the dashboard's `OK` reply.
+dashboard's hotspot (common SSIDs: `iteAP`, `iteAP-xxxx` or `ZXMOTO-…`), choose
+`ZXMOTO → 张雪 500RR 5 寸 / 张雪 820R` under Current output, leave the dashboard IP empty (it is derived
+as the `.1` gateway of the phone's subnet; known subnets 192.168.21.x / 192.168.43.x / 192.168.1.x),
+open projection navigation on the dashboard, then start CarPlay. The mirror channel is TCP 11111 first
+(the official Android path when no Bluetooth is used) and falls back to UDP 11111; the control channel
+is TCP 11113, and the actual video size is negotiated by the dashboard's `OK` reply.
 The protocol was reverse engineered from the ZXMOTO app. The official BLE/QR handshake is not
 implemented; if it stalls at "requesting projection", trigger projection with the official app
-first or add the BLE flow. Not yet validated on a real 500RR/820R. The default build does not embed
+first or add the BLE flow. iOS 18/26 has a known local-network permission bug (`POSIX 50 / Network is
+down`); after the first install allow Local Network and **restart the iPhone** before testing.
+Not yet validated on a real 500RR/820R. The default build does not embed
 an MFi identity; after installation you still import `certificate.p7b`, `leaf.cer`, and
 `private.x963` in the app. The CarPlay accessory authentication itself cannot be removed.
 [Protocol, build and debug notes](ZXMOTO-500RR.md).
